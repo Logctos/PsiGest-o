@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from database import init_db, get_db
 from agent import run_scheduling_agent
+from predictor import run_prediction
 
 load_dotenv()
 
@@ -76,6 +77,11 @@ class GenerateIn(BaseModel):
 
 class SettingPatch(BaseModel):
     value: str
+
+class PredictIn(BaseModel):
+    product_id: int
+    horizon: int = 21
+    force_retrain: bool = False
 
 
 # --- Products ---
@@ -245,6 +251,70 @@ def get_performance(month: Optional[str] = None):
     }
 
 
+# --- Predictive Analytics ---
+
+@app.post("/api/analytics/predict")
+def predict(data: PredictIn):
+    import predictor as _pred
+    if data.force_retrain:
+        _pred._model_cache.pop(data.product_id, None)
+
+    with get_db() as conn:
+        product = conn.execute("SELECT * FROM products WHERE id=?", (data.product_id,)).fetchone()
+        if not product:
+            raise HTTPException(404, "Produto nao encontrado")
+        product = dict(product)
+
+        history_rows = [
+            {"date": r["tracking_date"], "sold": r["sold"]}
+            for r in conn.execute(
+                "SELECT tracking_date, sold FROM daily_tracking WHERE product_id=? ORDER BY tracking_date",
+                (data.product_id,)
+            ).fetchall()
+        ]
+
+        today = date.today()
+        future_cutoff = (today + timedelta(days=data.horizon + 14)).isoformat()
+        planned_rows = [
+            {"date": r["scheduled_date"], "quantity": r["planned_quantity"]}
+            for r in conn.execute(
+                "SELECT scheduled_date, planned_quantity FROM production_schedule "
+                "WHERE product_id=? AND scheduled_date >= ? AND scheduled_date <= ? AND status != 'cancelled'",
+                (data.product_id, today.isoformat(), future_cutoff)
+            ).fetchall()
+        ]
+
+    result = run_prediction(
+        product_id=data.product_id,
+        history_rows=history_rows,
+        current_stock=product["current_stock"],
+        planned_production=planned_rows,
+        horizon=data.horizon,
+        monthly_target=product["monthly_target"],
+    )
+    result["product_name"] = product["name"]
+    result["product_code"] = product.get("code")
+    result["current_stock"] = product["current_stock"]
+    return result
+
+
+@app.get("/api/analytics/predict/all")
+def predict_all(horizon: int = 21):
+    import predictor as _pred
+    with get_db() as conn:
+        products = [dict(r) for r in conn.execute("SELECT * FROM products").fetchall()]
+
+    results = []
+    for p in products:
+        try:
+            from fastapi.testclient import TestClient  # noqa — only used for routing
+            result = predict(PredictIn(product_id=p["id"], horizon=horizon))
+            results.append(result)
+        except Exception as e:
+            results.append({"product_id": p["id"], "product_name": p["name"], "status": "error", "message": str(e)})
+    return {"horizon_days": horizon, "products": results}
+
+
 # --- Schedule ---
 
 @app.get("/api/schedule")
@@ -356,11 +426,10 @@ def delete_rule(rid: int):
 def get_settings():
     with get_db() as conn:
         rows = [dict(r) for r in conn.execute("SELECT * FROM settings ORDER BY key").fetchall()]
-        # Mask key values in response — send only whether they are set
         for r in rows:
             if r["input_type"] == "password" and r["value"]:
                 r["value_set"] = True
-                r["value"] = ""  # never expose keys to frontend
+                r["value"] = ""
             else:
                 r["value_set"] = False
         return rows
@@ -371,7 +440,6 @@ def update_setting(key: str, data: SettingPatch):
         row = conn.execute("SELECT key FROM settings WHERE key=?", (key,)).fetchone()
         if not row:
             raise HTTPException(404, "Setting not found")
-        # Only update if a non-empty value is provided (so empty = keep existing)
         if data.value != "":
             conn.execute("UPDATE settings SET value=? WHERE key=?", (data.value, key))
     return {"ok": True}

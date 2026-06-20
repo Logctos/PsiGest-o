@@ -5,16 +5,18 @@ import { RulesPage } from './pages/RulesPage'
 import { ProductsPage } from './pages/ProductsPage'
 import { MachinesPage } from './pages/MachinesPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { PredictivePage } from './pages/PredictivePage'
 
-type Page = 'dashboard' | 'schedule' | 'rules' | 'products' | 'machines' | 'settings'
+type Page = 'dashboard' | 'schedule' | 'rules' | 'products' | 'machines' | 'settings' | 'predictive'
 
 const NAV: { id: Page; label: string; icon: string; section?: string }[] = [
-  { id: 'dashboard',  label: 'Dashboard',      icon: 'D', section: 'principal' },
-  { id: 'schedule',   label: 'Programacao',    icon: 'P', section: 'principal' },
-  { id: 'rules',      label: 'Regras do Agente', icon: 'R', section: 'principal' },
-  { id: 'products',   label: 'Produtos',       icon: 'X', section: 'cadastros' },
-  { id: 'machines',   label: 'Maquinas',       icon: 'M', section: 'cadastros' },
-  { id: 'settings',   label: 'Configuracoes',  icon: 'C', section: 'sistema'   },
+  { id: 'dashboard',   label: 'Dashboard',         icon: 'D', section: 'principal' },
+  { id: 'schedule',    label: 'Programacao',        icon: 'P', section: 'principal' },
+  { id: 'predictive',  label: 'Analise Preditiva',  icon: 'AI', section: 'principal' },
+  { id: 'rules',       label: 'Regras do Agente',   icon: 'R', section: 'principal' },
+  { id: 'products',    label: 'Produtos',           icon: 'X', section: 'cadastros' },
+  { id: 'machines',    label: 'Maquinas',           icon: 'M', section: 'cadastros' },
+  { id: 'settings',    label: 'Configuracoes',      icon: 'C', section: 'sistema'   },
 ]
 
 const SECTIONS: { id: string; label: string }[] = [
@@ -28,12 +30,13 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
-      case 'dashboard': return <Dashboard />
-      case 'schedule':  return <SchedulePage />
-      case 'rules':     return <RulesPage />
-      case 'products':  return <ProductsPage />
-      case 'machines':  return <MachinesPage />
-      case 'settings':  return <SettingsPage />
+      case 'dashboard':  return <Dashboard />
+      case 'schedule':   return <SchedulePage />
+      case 'predictive': return <PredictivePage />
+      case 'rules':      return <RulesPage />
+      case 'products':   return <ProductsPage />
+      case 'machines':   return <MachinesPage />
+      case 'settings':   return <SettingsPage />
     }
   }
 

@@ -6,6 +6,7 @@ import type {
   Rule, RuleInput,
   TrackingInput,
   Setting,
+  PredictionResult,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -39,6 +40,12 @@ export const removeProduct = (mid: number, pid: number) => req<void>(`/api/machi
 export const getPerformance = (month?: string) =>
   req<PerformanceReport>(`/api/analytics/performance${month ? `?month=${month}` : ''}`)
 
+export const getPrediction = (productId: number, horizon = 21, forceRetrain = false) =>
+  req<PredictionResult>('/api/analytics/predict', {
+    method: 'POST',
+    body: JSON.stringify({ product_id: productId, horizon, force_retrain: forceRetrain }),
+  })
+
 // Schedule
 export const getSchedule = (weekStart?: string) =>
   req<ScheduleData>(`/api/schedule${weekStart ? `?week_start=${weekStart}` : ''}`)
@@ -69,3 +76,6 @@ export const getTracking = (month?: string, productId?: number) => {
 export const getSettings = () => req<Setting[]>('/api/settings')
 export const updateSetting = (key: string, value: string) =>
   req<void>(`/api/settings/${key}`, { method: 'PUT', body: JSON.stringify({ value }) })
+
+// Helper type re-export (used in api.ts internally)
+type ScheduleEntry = import('./types').ScheduleEntry

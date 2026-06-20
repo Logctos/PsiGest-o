@@ -162,3 +162,43 @@ export interface Setting {
   input_type: string
   value_set: boolean
 }
+
+export interface PredictionDay {
+  date: string
+  predicted_sales: number
+  planned_production: number
+  stock_after: number
+}
+
+export interface PredictionAlert {
+  level: 'critical' | 'warning' | 'info'
+  type: string
+  message: string
+}
+
+export interface FeatureImportance {
+  feature: string
+  importance: number
+}
+
+export interface PredictionResult {
+  product_id: number
+  product_name: string
+  product_code: string | null
+  current_stock: number
+  status: 'ok' | 'insufficient_data' | 'error'
+  message?: string
+  horizon_days: number
+  predictions: PredictionDay[]
+  total_predicted_sales: number
+  avg_daily_predicted: number
+  alerts: PredictionAlert[]
+  feature_importance: FeatureImportance[]
+  model_info: {
+    algorithm: string
+    n_estimators: number
+    training_samples: number
+    from_cache: boolean
+    mape_pct: number | null
+  }
+}
