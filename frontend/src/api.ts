@@ -5,6 +5,7 @@ import type {
   ScheduleData, ScheduleCreateInput, ScheduleUpdateInput, GenerateResult,
   Rule, RuleInput,
   TrackingInput,
+  Setting,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_URL ?? ''
@@ -63,3 +64,8 @@ export const getTracking = (month?: string, productId?: number) => {
   if (productId) p.set('product_id', String(productId))
   return req<unknown[]>(`/api/tracking?${p}`)
 }
+
+// Settings
+export const getSettings = () => req<Setting[]>('/api/settings')
+export const updateSetting = (key: string, value: string) =>
+  req<void>(`/api/settings/${key}`, { method: 'PUT', body: JSON.stringify({ value }) })

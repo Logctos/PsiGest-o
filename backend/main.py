@@ -74,6 +74,9 @@ class GenerateIn(BaseModel):
     week_start: str
     regenerate: bool = False
 
+class SettingPatch(BaseModel):
+    value: str
+
 
 # --- Products ---
 
@@ -344,6 +347,33 @@ def update_rule(rid: int, data: RuleIn):
 def delete_rule(rid: int):
     with get_db() as conn:
         conn.execute("DELETE FROM agent_rules WHERE id=?", (rid,))
+    return {"ok": True}
+
+
+# --- Settings ---
+
+@app.get("/api/settings")
+def get_settings():
+    with get_db() as conn:
+        rows = [dict(r) for r in conn.execute("SELECT * FROM settings ORDER BY key").fetchall()]
+        # Mask key values in response — send only whether they are set
+        for r in rows:
+            if r["input_type"] == "password" and r["value"]:
+                r["value_set"] = True
+                r["value"] = ""  # never expose keys to frontend
+            else:
+                r["value_set"] = False
+        return rows
+
+@app.put("/api/settings/{key}")
+def update_setting(key: str, data: SettingPatch):
+    with get_db() as conn:
+        row = conn.execute("SELECT key FROM settings WHERE key=?", (key,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Setting not found")
+        # Only update if a non-empty value is provided (so empty = keep existing)
+        if data.value != "":
+            conn.execute("UPDATE settings SET value=? WHERE key=?", (data.value, key))
     return {"ok": True}
 
 

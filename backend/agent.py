@@ -1,13 +1,10 @@
-import anthropic
 import json
 import os
 import re
 import calendar
 from datetime import date, timedelta
 
-from database import get_db
-
-AGENT_MODEL = os.environ.get("AGENT_MODEL", "claude-sonnet-4-6")
+from database import get_db, get_setting
 
 
 def _extract_json(text: str) -> dict:
@@ -20,12 +17,48 @@ def _extract_json(text: str) -> dict:
     raise ValueError("No JSON found in agent response")
 
 
-def run_scheduling_agent(week_start: str, regenerate: bool = False) -> dict:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY not set")
-
+def _call_anthropic(prompt: str, api_key: str, model: str) -> str:
+    import anthropic
     client = anthropic.Anthropic(api_key=api_key)
+    msg = client.messages.create(
+        model=model,
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return msg.content[0].text
+
+
+def _call_openai(prompt: str, api_key: str, model: str) -> str:
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key)
+    resp = client.chat.completions.create(
+        model=model,
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return resp.choices[0].message.content
+
+
+def _resolve_provider() -> tuple[str, str, str]:
+    """Returns (provider, api_key, model) reading from DB settings first, env as fallback."""
+    provider = get_setting("agent_provider") or os.environ.get("AGENT_PROVIDER", "anthropic")
+
+    if provider == "openai":
+        api_key = get_setting("openai_api_key") or os.environ.get("OPENAI_API_KEY", "")
+        model   = get_setting("openai_model")   or os.environ.get("OPENAI_MODEL", "gpt-4o")
+    else:
+        provider = "anthropic"
+        api_key = get_setting("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY", "")
+        model   = get_setting("anthropic_model")   or os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+
+    if not api_key:
+        raise ValueError(f"Chave de API nao configurada para o provedor '{provider}'. Acesse Configuracoes para inserir a chave.")
+
+    return provider, api_key, model
+
+
+def run_scheduling_agent(week_start: str, regenerate: bool = False) -> dict:
+    provider, api_key, model = _resolve_provider()
 
     ws_date = date.fromisoformat(week_start)
     we_date = ws_date + timedelta(days=4)
@@ -139,13 +172,12 @@ Retorne APENAS JSON valido:
   "alerts": ["Alerta critico 1", "..."]
 }}"""
 
-        msg = client.messages.create(
-            model=AGENT_MODEL,
-            max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}]
-        )
+        if provider == "openai":
+            raw = _call_openai(prompt, api_key, model)
+        else:
+            raw = _call_anthropic(prompt, api_key, model)
 
-        output = _extract_json(msg.content[0].text)
+        output = _extract_json(raw)
 
         for entry in output.get("schedule", []):
             conn.execute("""
@@ -160,4 +192,6 @@ Retorne APENAS JSON valido:
             "schedule_count": len(output.get("schedule", [])),
             "summary": output.get("summary", ""),
             "alerts": output.get("alerts", []),
+            "provider": provider,
+            "model": model,
         }

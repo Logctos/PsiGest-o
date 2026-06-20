@@ -124,6 +124,8 @@ export interface GenerateResult {
   schedule_count: number
   summary: string
   alerts: string[]
+  provider?: string
+  model?: string
 }
 
 export interface Rule {
@@ -150,4 +152,13 @@ export interface TrackingInput {
   stock_start: number
   produced: number
   sold: number
+}
+
+export interface Setting {
+  key: string
+  value: string
+  label: string
+  description: string
+  input_type: string
+  value_set: boolean
 }

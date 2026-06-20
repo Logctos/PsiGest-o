@@ -70,6 +70,14 @@ CREATE TABLE IF NOT EXISTS agent_rules (
     priority INTEGER DEFAULT 5,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT '',
+    label TEXT NOT NULL DEFAULT '',
+    description TEXT DEFAULT '',
+    input_type TEXT NOT NULL DEFAULT 'text'
+);
 """
 
 
@@ -88,12 +96,40 @@ def get_db():
         conn.close()
 
 
+def get_setting(key: str, fallback: str = "") -> str:
+    with get_db() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else fallback
+
+
 def init_db():
     with get_db() as conn:
         conn.executescript(SCHEMA)
+        _ensure_settings(conn)
         count = conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
         if count == 0:
             _insert_sample_data(conn)
+
+
+def _ensure_settings(conn):
+    defaults = [
+        ("agent_provider",    os.environ.get("AGENT_PROVIDER", "anthropic"), "Provedor de IA",
+         "Provedor usado pelo agente de programacao: 'anthropic' ou 'openai'", "select"),
+        ("anthropic_api_key", os.environ.get("ANTHROPIC_API_KEY", ""),       "Chave API Anthropic (Claude)",
+         "Chave de API da Anthropic. Começa com sk-ant-", "password"),
+        ("anthropic_model",   os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"), "Modelo Anthropic",
+         "Ex: claude-sonnet-4-6, claude-opus-4-8", "text"),
+        ("openai_api_key",    os.environ.get("OPENAI_API_KEY", ""),           "Chave API OpenAI",
+         "Chave de API da OpenAI. Começa com sk-", "password"),
+        ("openai_model",      os.environ.get("OPENAI_MODEL", "gpt-4o"),       "Modelo OpenAI",
+         "Ex: gpt-4o, gpt-4o-mini, o1-preview", "text"),
+    ]
+    for key, value, label, description, input_type in defaults:
+        conn.execute("""
+            INSERT INTO settings (key, value, label, description, input_type)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(key) DO NOTHING
+        """, (key, value, label, description, input_type))
 
 
 def _insert_sample_data(conn):
